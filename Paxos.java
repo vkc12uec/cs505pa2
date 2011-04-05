@@ -5,24 +5,18 @@ import java.net.*;
 import java.lang.*;
 import java.math.*;
 
-class Paxos
+class Paxos extends Thread
 {
-    //int num_Servers;
 	public List<String> server_List;
 	public static String leader;
 	public String self_ID;
 
-    public class ConsensusDecision 
+	public class ConsensusDecision 		// whr is this class used ?
 	{
 		public int instance;
 		public String proposedValue;
 		public String decidedValue;
 	}
-
-//    public class ClientRequest 
-//	{
-//		public String subTag;
-//	}
 
 	public Paxos(List<String> Members)
 	{
@@ -41,10 +35,10 @@ class Paxos
 
 		server_List = new ArrayList<String>();
 
-        for(int i= 0; i <Members.size() ; i++) {
+		for(int i= 0; i <Members.size() ; i++) {
 			server_List.add(Members.get(i));
-        }
-		
+		}
+
 		Collections.sort(Members, Collections.reverseOrder());
 		if(self_ID.equals(Members.get(0)))
 		{
@@ -63,24 +57,24 @@ class Paxos
 	{
 		return global_Proposal_Num;
 	}
-//	public ConsensusDecision propose(String proposal, int instance)
+	//	public ConsensusDecision propose(String proposal, int instance)
 
 
-    //Message types
+	//Message types
 	String getInstance_Tag = "GetInstance";
-    String request_Tag = "Request";
-    String prepare_Tag = "Prepare";
-    String promise_Tag = "Promise";
-    String accept_Tag = "Accept";
-    String accepted_Tag = "Accepted";
-    String response_Tag = "Response";
+	String request_Tag = "Request";
+	String prepare_Tag = "Prepare";
+	String promise_Tag = "Promise";
+	String accept_Tag = "Accept";
+	String accepted_Tag = "Accepted";
+	String response_Tag = "Response";
 
 	String alive_Tag = "Alive";
 
 	public static boolean am_I_Leader;
-    public static int global_Proposal_Num;
-    public int global_Instance_Num;
-    public int [][]num_Promise;
+	public static int global_Proposal_Num;
+	public int global_Instance_Num;
+	public int [][]num_Promise;
 	public int [][]num_Accepted;
 	public int [][]num_Rejected;
 	public String [][]clients_Info;
@@ -106,72 +100,66 @@ class Paxos
 			{
 				sendToHost_tmp(new_Msg, host);
 			}
-			//TODO do we need to start a timer
 		}
 	}
 
 	public String prepare_Response(String msg)
 	{
-			String[] words = msg.split(msgDelimiter);
-			int proposal_Number = Integer.parseInt(words[1]);
-			//String client_ID = words[2];
-			int instance_Number = Integer.parseInt(words[2]);
-			String lock_Name = words[3];
-			String lock_Action = words[4];
-			//TODO parser for lock Action
-			int lock_act = Integer.parseInt(lock_Action);
-			String response = "";
+		String[] words = msg.split(msgDelimiter);
+		int proposal_Number = Integer.parseInt(words[1]);
+		int instance_Number = Integer.parseInt(words[2]);
+		String lock_Name = words[3];
+		String lock_Action = words[4];
+		int lock_act = Integer.parseInt(lock_Action);
+		int leaseTime;
+		String response = "";
 
-			if(global_Proposal_Num <= proposal_Number)
-				global_Proposal_Num = proposal_Number;
-			else
-				response = "no";
-				//return (accepted_Tag + msgDelimiter + "no");
-			//TODO if the response is NO ensure that it is being send to the correct node... not necessarily the leader
+		if(global_Proposal_Num <= proposal_Number)
+			global_Proposal_Num = proposal_Number;
+		else
+			response = "no";
+		//return (accepted_Tag + msgDelimiter + "no");
+		//TODO if the response is NO ensure that it is being send to the correct node... not necessarily the leader
 
-			switch(lock_act)
-			{
-				case 0: 
-						int leaseTime = Integer.parseInt(words[5]);
-						Lock t = new Lock (lock_Name, leaseTime);
-						LockMain.valid_locks.add(lock_Name);	
-						LockMain.lock_map.put (lock_Name, t);		// new lock in map with timer = 0
-						response = "yes";
-						break;
-				case 1:
-						int leaseTime = Integer.parseInt(words[5]);
-						LockMain.lock_map.get(lock_Name).birthTime = System.currentTimeMillis(); 
-						LockMain.lock_map.get(lock_Name).leaseTime = leaseTime;
-						
-						response = "yes";	
-						break;
-				case 2:
-						LockMain.lock_map.get(lock_Name).birthTime =0;
-						//LockMain.lock_map.get(lock_Name).leaseTime = leaseTime;
-						response = "yes";	
-						break;
+		switch(lock_act)
+		{
+			case 0: 
+				leaseTime = Integer.parseInt(words[5]);
+				Lock t = new Lock (lock_Name, leaseTime);
+				Locks.valid_locks.add(lock_Name);	
+				Locks.lock_map.put (lock_Name, t);		// new lock in map with timer = 0
+				response = "yes";
+				break;
+			case 1:
+				leaseTime = Integer.parseInt(words[5]);
+				Locks.lock_map.get(lock_Name).birthTime = System.currentTimeMillis(); 
+				Locks.lock_map.get(lock_Name).leaseTime = leaseTime;
+
+				response = "yes";	
+				break;
+			case 2:
+				Locks.lock_map.get(lock_Name).birthTime =0;
+				//Locks.lock_map.get(lock_Name).leaseTime = leaseTime;
+				response = "yes";	
+				break;
 
 				//case 3:
-				default: break;
-			}
-			
-//			if(Math.random() > 0.5)
-//				return (accepted_Tag + msgDelimiter + "yes");
-//			else
-//				return (accepted_Tag + msgDelimiter + "no");
+			default: break;
+		}
 
-			String final_response = accepted_Tag + msgDelimiter + proposal_Number + msgDelimiter + instance_Number + msgDelimiter + response;
-			return final_response;
+		String final_response = accepted_Tag + msgDelimiter + proposal_Number + msgDelimiter + instance_Number + 
+								msgDelimiter + response + msgDelimiter + Integer.toString(lock_act);
+		return final_response;
 	}
 
-// ####################################### Ring substrate thread runs this function ##############################################
+	// ####################################### Paxos thread runs this function ##############################################
 
 	String msgDelimiter = "#";
 	ServerSocket 		mysock;
 	Socket 				outsock;
 	private static int	listenport = 6789;
 
-	public void run() //throws /*RingException*/ InterruptedException
+	public void run() 
 	{
 		try
 		{
@@ -181,8 +169,6 @@ class Paxos
 
 			while(true)
 			{
-				//hostsJoinedlist = ("HJL in run thread");
-				//debug (hostsJoinedlist);
 				Socket connectionSocket = mysock.accept();
 				BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
 				DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
@@ -200,24 +186,24 @@ class Paxos
 				String msg_tag = words[0];
 				//String src = words[1];				// host who wants to join the ring
 				//System.out.println("Tag = " + msg_tag + " src = " + src);
-				
 
-//###################################### handler for election msg listen A ###############################################
+
+				//######################################  ###############################################
 				if(msg_tag.equals(alive_Tag)) 
-                {
-                	outToClient.writeBytes("yes\n");
-                }                    
-//###################################### handler for election msg listen A ###############################################
+				{
+					outToClient.writeBytes("yes\n");
+				}                    
+				//######################################  ###############################################
 				if(msg_tag.equals(getInstance_Tag)) 
-                {
+				{
 					global_Instance_Num++;
 					msg = Integer.toString(global_Instance_Num);
-                	outToClient.writeBytes(msg+"\n");
-                }                    
-//###################################### handler for election msg listen A ###############################################
+					outToClient.writeBytes(msg+"\n");
+				}                    
+				//######################################  ###############################################
 
 				if(msg_tag.equals(request_Tag)) 
-                {
+				{
 					// Assume that the message format is request_Tag##client_ID##Instance_Num##lock_Num##Some_Number
 					// Some_Number= 2 -release lock, 1 - aquire lock, 0 - create lock, 3 - renew lock
 					String client_ID = words[1];
@@ -232,43 +218,44 @@ class Paxos
 					clients_Info[global_Proposal_Num][instance_Number] = client_ID;
 					lock_Info[global_Proposal_Num][instance_Number] = lock_Name;
 					lock_Action_Info[global_Proposal_Num][instance_Number] = some_Number;
-					
+
 					msg = joinit(words);
 
 					// This is similar to the propose function in the assignment
 					start_Accept(msg);	
-                }                    
-//###################################### handler for election msg listen A ###############################################
+				}                    
+				//######################################  ###############################################
 
 				if(msg_tag.equals(prepare_Tag)) 
-                {
-                	outToClient.writeBytes("yes\n");
-                }                    
-//###################################### handler for election msg listen A ###############################################
+				{
+					outToClient.writeBytes("yes\n");
+				}                    
+				//######################################  ###############################################
 
 				if(msg_tag.equals(promise_Tag)) 
-                {
-                	outToClient.writeBytes("yes\n");
-                }                    
+				{
+					outToClient.writeBytes("yes\n");
+				}                    
 
-//###################################### handler for election msg listen A ###############################################
+				//######################################  ###############################################
 				if(msg_tag.equals(accept_Tag)) 
-                {
-                	//outToClient.writeBytes("yes\n");
+				{
+					//outToClient.writeBytes("yes\n");
 					msg = joinit(words);
 					String response = prepare_Response(msg);
 					//TODO response  = accepted_Tag + Proposal number + Instance Number + Yes/No
 					sendToHost_tmp(response, leader);
-                }                    
+				}                    
 
-//###################################### handler for election msg listen A ###############################################
+				//######################################  ###############################################
 				if(msg_tag.equals(accepted_Tag)) 
-                {
-                	//outToClient.writeBytes("yes\n");
+				{
+					//outToClient.writeBytes("yes\n");
 					int proposal_Num = Integer.parseInt(words[1]);
 					int instance_Number = Integer.parseInt(words[2]);
 					reply = words[3];
-					
+					int lock_act = Integer.parseInt(words[4]);
+
 					if(reply.equals("yes"))
 						num_Accepted[proposal_Num][instance_Number]++;
 
@@ -295,24 +282,44 @@ class Paxos
 						response_info[proposal_Num][instance_Number] = "no";
 					}
 
-					synchronized (Locks.lock1) {
-							Locks.createLock_run = false;  
-							Locks.lock1.notifyAll();
-					}
-                }                    
+					Object lock_ref = Locks.lock2d[proposal_Num][instance_Number];
 
-//###################################### handler for election msg listen A ###############################################
+					switch (lock_act) {			// we need lock_act to do such a switch case
+						case 0:
+							synchronized (lock_ref) {
+								Locks.createLock_run = false;  
+								lock_ref.notifyAll();
+							}
+							break;
+
+						case 1:
+							synchronized (lock_ref) {
+								Locks.acquireLock_run = false;  
+								lock_ref.notifyAll();
+							}
+							break;
+
+						case 2:
+							break;
+
+						case 3:
+							break;
+					}
+
+				}                    
+
+				//######################################  ###############################################
 				if(msg_tag.equals(response_Tag)) 
-                {
-                	outToClient.writeBytes("yes\n");
-                }                    
-            }                   
-        }        
+				{
+					outToClient.writeBytes("yes\n");
+				}                    
+			}                   
+		}        
 		catch (Exception e)
 		{
 			e.printStackTrace();
 		}
-    }                   
+	}                   
 
 	public static String sendToHost(String msg, String dest)
 	{
@@ -334,7 +341,7 @@ class Paxos
 		catch(Exception e)
 		{
 			if (e.toString().equals ("java.net.ConnectException: Connection refused"))
-			return "no";
+				return "no";
 			//return "java.net.ConnectException: Connection refused";
 			//e.printStackTrace();
 		}
@@ -342,18 +349,18 @@ class Paxos
 		return null;
 	}
 
-    public  String joinit (String[] args) {
-        //String delim = "#";
-        String delim = msgDelimiter;
-        String reply="";
-        for (int i=1; i<args.length; i++) {
-            reply += args[i];
-            if (i == args.length-1)
-                break;
-            reply += delim;
-        }
+	public  String joinit (String[] args) {
+		//String delim = "#";
+		String delim = msgDelimiter;
+		String reply="";
+		for (int i=1; i<args.length; i++) {
+			reply += args[i];
+			if (i == args.length-1)
+				break;
+			reply += delim;
+		}
 		return reply;
-    }  		// check return OK
+	}  		// check return OK
 
 	public static String sendToHost_tmp(String msg, String dest)
 	{
@@ -379,40 +386,37 @@ class Paxos
 		System.out.println (whoami + ": returns null ");
 		return null;
 	}
-		public static List<String> alive_Host;
-		public static List<String> failed_Host;
-	public class FailureDetector
+
+	public static List<String> alive_Host = new ArrayList<String> ();
+	public static List<String> failed_Host = new ArrayList<String> ();
+
+	public class FailureDetector extends Thread
 	{
 		public List<String> list_Host;
 
-		public FailureDetector(List<String> Members)
+		public FailureDetector(List<String> Members)		// static assigned list , cant change in future
 		{
 			list_Host = new ArrayList<String> ();
 			for(int i= 0; i <Members.size() ; i++) {
 				list_Host.add(Members.get(i));
 			}
-
 		}
 
 		public List<String> getAlive() {
 			return Paxos.alive_Host;
 		}
-		//return the list of processes that are alive
-		//
+
 		public List<String> getFailed() {
 			return Paxos.failed_Host;
 		}
-		//return the list of processes that have failed
-		//
+
 		public boolean isAlive(String hostname) {
 
 			if(Paxos.alive_Host.contains(hostname))
 				return true;
 			else
 				return false;
-
 		}
-		//return true if hostname is alive
 
 		public String getLeader() {
 			Collections.sort(Paxos.alive_Host, Collections.reverseOrder());
@@ -421,37 +425,42 @@ class Paxos
 				Paxos.am_I_Leader = true;
 				Paxos.global_Proposal_Num++;
 				//TODO Prepare and Propose
-				LS temp = new LS();
+				Paxos temp = new Paxos();		// if I m leader, i shud start my Paxos thread
+				//Locks temp = new Locks();		// if I m leader, i shud start my Paxos thread
 				temp.start();
 			}
 			return Paxos.alive_Host.get(0);
 		}
-		//return current Leader
 
 		public void run() {
-			Paxos.alive_Host = new ArrayList<String> ();
-			Paxos.failed_Host = new ArrayList<String> ();
+			/*Paxos.alive_Host = new ArrayList<String> ();
+			  Paxos.failed_Host = new ArrayList<String> ();*/
 
-			for(int i = 0 ; i < list_Host.size() ; i++) {
-				String msg = alive_Tag + msgDelimiter;
-				String reply = sendToHost(msg, list_Host.get(i));
-				if(reply.equals("yes")) {
-					Paxos.alive_Host.add(list_Host.get(i));
-				}
-				else {
-					Paxos.failed_Host.add(list_Host.get(i));
-					if(list_Host.get(i).equals(Paxos.leader))
-					{
-						Paxos.leader = getLeader();
+			while (1) {
+
+				for(int i = 0 ; i < list_Host.size() ; i++) {
+					String msg = alive_Tag + msgDelimiter;
+					String reply = sendToHost(msg, list_Host.get(i));
+					if(reply.equals("yes")) {
+						Paxos.alive_Host.add(list_Host.get(i));
 					}
-				}
+					else {
+						Paxos.failed_Host.add(list_Host.get(i));
+						if(list_Host.get(i).equals(Paxos.leader))
+						{
+							Paxos.leader = getLeader();
+						}
+					}
 
-			}
+				}
+				sleep (30000); 	// 30 sec sleep
+			}	// while
 		}
-	}
+
+	}		// CFailDetector
 
 	public static void main (String args[])
 	{
-		
+
 	}
 }

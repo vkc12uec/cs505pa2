@@ -2,14 +2,15 @@ import java.rmi.*;
 import java.rmi.server.*;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.*;
 
-class LockClient() { /* applications can use this class to acquire and release locks */
+class LockClient { /* applications can use this class to acquire and release locks */
 	
 	public List<String> valid_locks;
 	LockServer lockInterface;
 
 	public LockClient () {
-		valid_locks = new List<String> ();
+		valid_locks = new ArrayList<String> ();
 		
 			try {
 			  lockInterface = 
@@ -20,7 +21,7 @@ class LockClient() { /* applications can use this class to acquire and release l
 			}
 	}
 
-	public static debug (String msg) {
+	public void debug (String msg) {
 		System.out.println (msg);
 	}
 
@@ -39,41 +40,70 @@ class LockClient() { /* applications can use this class to acquire and release l
 	public boolean createLock(String lock) {
 		//LockServer temp = getRemoteObject();
 		LockServer temp = lockInterface;
+		boolean b  = false;
+		try {
+			b = temp.createLock(lock);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
 
-
-		if( temp.createLock(lock) ) {
+		if( b ) {
 			System.out.println ("createLock: for " + lock + " success");
 			valid_locks.add(lock);		// add
 		}
 		else {
 			System.out.println ("createLock: for " + lock + " fail");
 		}
+		return b;
 	}
 
 	public List<String> getAllLocks() {
-		//LockServer temp = getRemoteObject();
 		LockServer temp = lockInterface;
 		List<String> list;
+
+		try {
 		list = temp.getAllLocks();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		return list;
 	}
 
 	public Lock acquireLock(String lock, int leaseTime) {
-		//LockServer temp = getRemoteObject();
 		LockServer temp = lockInterface;
-		return temp.acquireLock (lock, leaseTime);
+		Lock t;
+		
+		try {
+			t = temp.acquireLock (lock, leaseTime);
+		} catch (Exception e) {
+				e.printStackTrace();
+			}
+		return t;
 	}
 
 	public boolean releaseLock(String lock) {
-		//LockServer temp = getRemoteObject();
 		LockServer temp = lockInterface;
-		return temp.releaseLock(lock);
+		boolean b=false;
+
+		try {
+			b = temp.releaseLock(lock);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return b;
 	}
 
 	public Lock renewLock(String lock, int renewalTime) {
-		//LockServer temp = getRemoteObject();
 		LockServer temp = lockInterface;
-		return temp.renewLock (lock, renewalTime);
+		Lock t;
+
+		try {
+			t = temp.renewLock (lock, renewalTime);
+		} catch (Exception e) {
+				e.printStackTrace();
+			}
+		return t;
 	}
 
 	public boolean isValid(String lock) {	/* non RMI */

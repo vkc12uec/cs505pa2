@@ -19,10 +19,10 @@ class Paxos
 		public String decidedValue;
 	}
 
-    public class ClientRequest 
-	{
-		public String subTag;
-	}
+//    public class ClientRequest 
+//	{
+//		public String subTag;
+//	}
 
 	public Paxos(List<String> Members)
 	{
@@ -54,8 +54,15 @@ class Paxos
 		}
 	}
 
-//	public int getNextInstance()
+	public int getNextInstance()
+	{
+		return ++global_Instance_Num;
+	}
 
+	public int getProposalNumber()
+	{
+		return global_Proposal_Num;
+	}
 //	public ConsensusDecision propose(String proposal, int instance)
 
 
@@ -77,9 +84,17 @@ class Paxos
 	public int [][]num_Accepted;
 	public int [][]num_Rejected;
 	public String [][]clients_Info;
-	public int [][]lock_Info;
+	public String [][]response_info;
+	public String [][]lock_Info;
 	public int [][]lock_Action_Info;
 
+	public boolean  return_response_info(int inst_num,int prop_num)
+	{
+		if(response_info[prop_num][inst_num].equals("yes"))
+			return true;
+		else
+			return false;
+	}
 
 	public void start_Accept(String msg)
 	{
@@ -99,23 +114,54 @@ class Paxos
 	{
 			String[] words = msg.split(msgDelimiter);
 			int proposal_Number = Integer.parseInt(words[1]);
-			String client_ID = words[2];
-			int instance_Number = Integer.parseInt(words[3]);
-			int lock_Num = Integer.parseInt(words[4]);
-			String lock_Action = words[5];
+			//String client_ID = words[2];
+			int instance_Number = Integer.parseInt(words[2]);
+			String lock_Name = words[3];
+			String lock_Action = words[4];
 			//TODO parser for lock Action
-			int some_Number = Integer.parseInt(lock_Action);
+			int lock_act = Integer.parseInt(lock_Action);
+			String response = "";
 
 			if(global_Proposal_Num <= proposal_Number)
 				global_Proposal_Num = proposal_Number;
 			else
-				return (accepted_Tag + msgDelimiter + "no");
+				response = "no";
+				//return (accepted_Tag + msgDelimiter + "no");
 			//TODO if the response is NO ensure that it is being send to the correct node... not necessarily the leader
 
-			if(Math.random() > 0.5)
-				return (accepted_Tag + msgDelimiter + "yes");
-			else
-				return (accepted_Tag + msgDelimiter + "no");
+			switch(lock_act)
+			{
+				case 0: 
+						int leaseTime = Integer.parseInt(words[5]);
+						Lock t = new Lock (lock_Name, leaseTime);
+						LockMain.valid_locks.add(lock_Name);	
+						LockMain.lock_map.put (lock_Name, t);		// new lock in map with timer = 0
+						response = "yes";
+						break;
+				case 1:
+						int leaseTime = Integer.parseInt(words[5]);
+						LockMain.lock_map.get(lock_Name).birthTime = System.currentTimeMillis(); 
+						LockMain.lock_map.get(lock_Name).leaseTime = leaseTime;
+						
+						response = "yes";	
+						break;
+				case 2:
+						LockMain.lock_map.get(lock_Name).birthTime =0;
+						//LockMain.lock_map.get(lock_Name).leaseTime = leaseTime;
+						response = "yes";	
+						break;
+
+				//case 3:
+				default: break;
+			}
+			
+//			if(Math.random() > 0.5)
+//				return (accepted_Tag + msgDelimiter + "yes");
+//			else
+//				return (accepted_Tag + msgDelimiter + "no");
+
+			String final_response = accepted_Tag + msgDelimiter + proposal_Number + msgDelimiter + instance_Number + msgDelimiter + response;
+			return final_response;
 	}
 
 // ####################################### Ring substrate thread runs this function ##############################################
@@ -173,10 +219,10 @@ class Paxos
 				if(msg_tag.equals(request_Tag)) 
                 {
 					// Assume that the message format is request_Tag##client_ID##Instance_Num##lock_Num##Some_Number
-					// Some_Number= 0 -release lock, 1 - aquire lock, 2 - create lock, 3 - renew lock
+					// Some_Number= 2 -release lock, 1 - aquire lock, 0 - create lock, 3 - renew lock
 					String client_ID = words[1];
 					int instance_Number = Integer.parseInt(words[2]);
-					int lock_Num = Integer.parseInt(words[3]);
+					String lock_Name = words[3];
 					String lock_Action = words[4];
 					//TODO parser for lock Action
 					int some_Number = Integer.parseInt(lock_Action);
@@ -184,7 +230,7 @@ class Paxos
 					num_Accepted[global_Proposal_Num][instance_Number] = 0;
 					num_Promise[global_Proposal_Num][instance_Number] = 0;
 					clients_Info[global_Proposal_Num][instance_Number] = client_ID;
-					lock_Info[global_Proposal_Num][instance_Number] = lock_Num;
+					lock_Info[global_Proposal_Num][instance_Number] = lock_Name;
 					lock_Action_Info[global_Proposal_Num][instance_Number] = some_Number;
 					
 					msg = joinit(words);
@@ -231,10 +277,11 @@ class Paxos
 
 					if(num_Accepted[proposal_Num][instance_Number] >= (alive_Host.size()/2))
 					{
+						response_info[proposal_Num][instance_Number] = "yes";
 						// Response to client
 						// Tag + Instance number + reply (yes/no)
-						msg = response_Tag + msgDelimiter + words[2] + msgDelimiter + "yes" ; 
-						sendToHost_tmp(msg, clients_Info[proposal_Num][instance_Number]);
+						//msg = response_Tag + msgDelimiter + words[2] + msgDelimiter + "yes" ; 
+						//sendToHost_tmp(msg, clients_Info[proposal_Num][instance_Number]);
 						//TODO make sure that this send is done only once
 					}
 
@@ -242,11 +289,16 @@ class Paxos
 					{
 						// Response to client
 						// Tag + Instance number + reply (yes/no)
-						msg = response_Tag + msgDelimiter + words[2] + msgDelimiter + "no" ; 
-						sendToHost_tmp(msg, clients_Info[proposal_Num][instance_Number]);
+						//msg = response_Tag + msgDelimiter + words[2] + msgDelimiter + "no" ; 
+						//sendToHost_tmp(msg, clients_Info[proposal_Num][instance_Number]);
 						//TODO make sure that this send is done only once
+						response_info[proposal_Num][instance_Number] = "no";
 					}
 
+					synchronized (Locks.lock1) {
+							Locks.createLock_run = false;  
+							Locks.lock1.notifyAll();
+					}
                 }                    
 
 //###################################### handler for election msg listen A ###############################################
@@ -343,18 +395,18 @@ class Paxos
 		}
 
 		public List<String> getAlive() {
-			return alive_Host;
+			return Paxos.alive_Host;
 		}
 		//return the list of processes that are alive
 		//
 		public List<String> getFailed() {
-			return failed_Host;
+			return Paxos.failed_Host;
 		}
 		//return the list of processes that have failed
 		//
 		public boolean isAlive(String hostname) {
 
-			if(alive_Host.contains(hostname))
+			if(Paxos.alive_Host.contains(hostname))
 				return true;
 			else
 				return false;
@@ -363,29 +415,31 @@ class Paxos
 		//return true if hostname is alive
 
 		public String getLeader() {
-			Collections.sort(alive_Host, Collections.reverseOrder());
-			if(self_ID.equals(alive_Host.get(0)))
+			Collections.sort(Paxos.alive_Host, Collections.reverseOrder());
+			if(self_ID.equals(Paxos.alive_Host.get(0)))
 			{
 				Paxos.am_I_Leader = true;
 				Paxos.global_Proposal_Num++;
 				//TODO Prepare and Propose
+				LS temp = new LS();
+				temp.start();
 			}
-			return alive_Host.get(0);
+			return Paxos.alive_Host.get(0);
 		}
 		//return current Leader
 
 		public void run() {
-			alive_Host = new ArrayList<String> ();
-			failed_Host = new ArrayList<String> ();
+			Paxos.alive_Host = new ArrayList<String> ();
+			Paxos.failed_Host = new ArrayList<String> ();
 
 			for(int i = 0 ; i < list_Host.size() ; i++) {
 				String msg = alive_Tag + msgDelimiter;
 				String reply = sendToHost(msg, list_Host.get(i));
 				if(reply.equals("yes")) {
-					alive_Host.add(list_Host.get(i));
+					Paxos.alive_Host.add(list_Host.get(i));
 				}
 				else {
-					failed_Host.add(list_Host.get(i));
+					Paxos.failed_Host.add(list_Host.get(i));
 					if(list_Host.get(i).equals(Paxos.leader))
 					{
 						Paxos.leader = getLeader();

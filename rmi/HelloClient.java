@@ -12,7 +12,8 @@ public class HelloClient{  /**
         (HelloInterface) Naming.lookup ("sac07.cs.purdue.edu/Hello");
       System.out.println (hello.say());
     } catch (Exception e) {
-      System.out.println ("HelloClient exception: " + e.toString());
+      System.out.println ("HelloClient exception: ");
+	 e.printStackTrace() ;
     }
 }
 }

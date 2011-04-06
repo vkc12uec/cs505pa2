@@ -1,44 +1,35 @@
 import java.rmi.*;
+import java.rmi.registry.*;
 import java.rmi.server.*;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.*;
 
 class LockClient { /* applications can use this class to acquire and release locks */
-	
+
 	public List<String> valid_locks;
 	LockServer lockInterface;
+	Registry registry;
+	public static String serverAdd = "sslab08.cs.purdue.edu";		// rmi server
+	public static int rmiport = 3232;
 
 	public LockClient () {
 		valid_locks = new ArrayList<String> ();
-		
-			try {
-			  lockInterface = 
-				(LockServer) Naming.lookup ("sac07.cs.purdue.edu/Lock");
-			  //System.out.println (hello.say());
-			} catch (Exception e) {
-			  System.out.println ("LockClient exception: " + e.toString());
-			}
+
+		try {
+			registry=LocateRegistry.getRegistry(serverAdd, rmiport);
+			lockInterface = (LockServer) registry.lookup("Lock");
+		} catch (Exception e) {
+			System.out.println ("LockClient exception: ");
+			e.printStackTrace();
+		}
 	}
 
 	public void debug (String msg) {
 		System.out.println (msg);
 	}
 
-	public LockServer getRemoteObject () {	// static ?
-		String DLM_server = "sac07.cs.purdue.edu";
-		try {
-		LockServer ls = (LockServer) Naming.lookup (DLM_server+"/Lock");
-		return ls;
-		}
-		catch (Exception e) {
-			System.out.println ("getRemoteObject: exception "+ e);
-		}
-		return null;
-	}
-
 	public boolean createLock(String lock) {
-		//LockServer temp = getRemoteObject();
 		LockServer temp = lockInterface;
 		boolean b  = false;
 		try {
@@ -60,10 +51,10 @@ class LockClient { /* applications can use this class to acquire and release loc
 
 	public List<String> getAllLocks() {
 		LockServer temp = lockInterface;
-		List<String> list;
+		List<String> list= null;
 
 		try {
-		list = temp.getAllLocks();
+			list = temp.getAllLocks();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -72,13 +63,17 @@ class LockClient { /* applications can use this class to acquire and release loc
 
 	public Lock acquireLock(String lock, int leaseTime) {
 		LockServer temp = lockInterface;
-		Lock t;
-		
+		Lock t = null;
+
 		try {
 			t = temp.acquireLock (lock, leaseTime);
-		} catch (Exception e) {
-				e.printStackTrace();
+			if(t.leaseTime == -1)
+			{
+				System.out.println("lock cannot be aquired");
 			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		return t;
 	}
 
@@ -96,13 +91,13 @@ class LockClient { /* applications can use this class to acquire and release loc
 
 	public Lock renewLock(String lock, int renewalTime) {
 		LockServer temp = lockInterface;
-		Lock t;
+		Lock t = null;
 
 		try {
 			t = temp.renewLock (lock, renewalTime);
 		} catch (Exception e) {
-				e.printStackTrace();
-			}
+			e.printStackTrace();
+		}
 		return t;
 	}
 
@@ -117,6 +112,14 @@ public class ClientApp
 	{
 		LockClient client = new LockClient();
 		//give the list of actions you wish to do with the client 
-		client.createLock("Ramu");
+		client.createLock("ramu");
+		/*client.createLock("kanu");
+		client.createLock("samu");
+		Lock l1 = client.acquireLock("ramu", 100);
+		Lock l2 = client.acquireLock("kanu", 100);
+		Lock l3 = client.acquireLock("samu", 100);*/
+
+		while (true) {
+		}
 	}
 }

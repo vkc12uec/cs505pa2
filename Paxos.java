@@ -9,7 +9,7 @@ class Paxos extends Thread
 {
 	public List<String> server_List;
 	public static String leader;
-	public String self_ID;
+	public static String self_ID;
 
 	public class ConsensusDecision 		// whr is this class used ?
 	{
@@ -18,8 +18,15 @@ class Paxos extends Thread
 		public String decidedValue;
 	}
 
+	public static void debug (String s) {
+		System.out.println ("\n");
+		System.out.println (s);
+		System.out.println ("\n");
+	}
+
 	public Paxos(List<String> Members)
 	{
+		debug ("me: ctor:Paxos");
 		global_Proposal_Num = 0;
 		global_Instance_Num = 0;
 		// Geting localhostname
@@ -43,9 +50,12 @@ class Paxos extends Thread
 		if(self_ID.equals(Members.get(0)))
 		{
 			am_I_Leader = true;
-			global_Proposal_Num++;
+			global_Proposal_Num++;			// this is done just for leader not acceptors, TODO
 			//TODO Prepare and Propose
 		}
+
+		myFD = new FailureDetector(Members);
+		myFD.start();		// start thread
 	}
 
 	public int getNextInstance()
@@ -132,7 +142,7 @@ class Paxos extends Thread
 				break;
 			case 1:
 				leaseTime = Integer.parseInt(words[5]);
-				Locks.lock_map.get(lock_Name).birthTime = System.currentTimeMillis(); 
+				Locks.lock_map.get(lock_Name).birthTime = (int)System.currentTimeMillis(); 
 				Locks.lock_map.get(lock_Name).leaseTime = leaseTime;
 
 				response = "yes";	
@@ -148,7 +158,7 @@ class Paxos extends Thread
 		}
 
 		String final_response = accepted_Tag + msgDelimiter + proposal_Number + msgDelimiter + instance_Number + 
-								msgDelimiter + response + msgDelimiter + Integer.toString(lock_act);
+			msgDelimiter + response + msgDelimiter + Integer.toString(lock_act);
 		return final_response;
 	}
 
@@ -399,6 +409,7 @@ class Paxos extends Thread
 			list_Host = new ArrayList<String> ();
 			for(int i= 0; i <Members.size() ; i++) {
 				list_Host.add(Members.get(i));
+				Paxos.alive_Host.add(Members.get(i));
 			}
 		}
 
@@ -420,47 +431,54 @@ class Paxos extends Thread
 
 		public String getLeader() {
 			Collections.sort(Paxos.alive_Host, Collections.reverseOrder());
-			if(self_ID.equals(Paxos.alive_Host.get(0)))
+			if (Paxos.alive_Host.size() == 0){
+				debug ("me: FD::getLeader , list size = 0");
+				return "null";
+				}
+			else if(self_ID.equals(Paxos.alive_Host.get(0)))
 			{
 				Paxos.am_I_Leader = true;
 				Paxos.global_Proposal_Num++;
 				//TODO Prepare and Propose
-				Paxos temp = new Paxos();		// if I m leader, i shud start my Paxos thread
+				//Paxos temp = new Paxos();		// if I m leader, i shud start my Paxos thread
 				//Locks temp = new Locks();		// if I m leader, i shud start my Paxos thread
-				temp.start();
+				//temp.start();
 			}
 			return Paxos.alive_Host.get(0);
 		}
 
 		public void run() {
-			/*Paxos.alive_Host = new ArrayList<String> ();
-			  Paxos.failed_Host = new ArrayList<String> ();*/
+			debug ("me: FD::run, starting FD thread for host = "+Paxos.self_ID);
 
-			while (1) {
-
+			while (true) {
+				try {
+					sleep (30000); 	// 30 sec sleep
+					} 
+				catch (Exception e){
+					}
 				for(int i = 0 ; i < list_Host.size() ; i++) {
 					String msg = alive_Tag + msgDelimiter;
 					String reply = sendToHost(msg, list_Host.get(i));
+
 					if(reply.equals("yes")) {
 						Paxos.alive_Host.add(list_Host.get(i));
 					}
 					else {
 						Paxos.failed_Host.add(list_Host.get(i));
-						if(list_Host.get(i).equals(Paxos.leader))
-						{
-							Paxos.leader = getLeader();
-						}
 					}
-
 				}
-				sleep (30000); 	// 30 sec sleep
+				Paxos.leader = getLeader();			// CHANGE THIS, APPEARS ICKY
+				debug ("me: FD:run, leader of system = "+Paxos.leader);
+
 			}	// while
-		}
+		}	// run
 
 	}		// CFailDetector
 
-	public static void main (String args[])
-	{
+	public FailureDetector myFD;		// this will be spawn in Paxos construtor
 
-	}
+	/*public static void main (String [] args)
+	  {
+	  System.out.println ("hel");
+	  }*/
 }

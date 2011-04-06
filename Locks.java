@@ -1,46 +1,69 @@
+// TODO: 	all the clients have prior knowledge of leaders, hence all the client also runs a thread to ping each of the acceptor
 
 import java.rmi.*;
 import java.rmi.server.*;
+import java.rmi.registry.*;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.*;
 
-//TODO:	this has to extend thread
 public class Locks extends UnicastRemoteObject implements LockServer {
+	public void debug (String msg) {
+		System.out.println (msg);
+	}
+
+	public static int rmiport = 3232;
+	Registry registry;    // rmi registry for lookup the remote objects.
 
 	public static List <String> valid_locks;
 	public static HashMap acquired_locks;		// Lock name and 0/1 acquired / release
 	public static HashMap<String, Lock> lock_map ;			// lock name / lock object
-												// these 3 states are replicas	, shud they be in Paxos class ?
-
-
+	// these 3 states are replicas	, shud they be in Paxos class ?
 	public static Object [][] lock2d;
-	//public static Object lock2;
-	//public static Object lock3;
 	public static boolean  createLock_run;
 	public static boolean  acquireLock_run;
 	public static boolean  releaseLock_run;
 
+	public static int maxp = 100;
+	public static int maxi = 100;
+
 	public Paxos myPaxos;
 	String msgDelimiter = "#";
 
-	public Locks () {
+	public Locks (String [] L) throws RemoteException {
+
 		valid_locks = new ArrayList<String> ();
 		acquired_locks = new HashMap();
-		lock_map = new HashMap();
-		myPaxos = new Paxos();
-		lock2d = new Object[100][100];		// propNum / instNum
+		lock_map = new HashMap<String, Lock>();
+		lock2d = new Object[maxp][maxi];		// propNum / instNum
+		for (int i=0;i<maxi;i++)
+			for (int j=0;j<maxi;j++)
+				lock2d[i][j] = new Object();
 		createLock_run = true;
 
+		List<String> hosts = new ArrayList<String> ();
 
-		//		try {
-		//		Naming.rebind("Locks", new Locks());	// correct ?	see RMI example
-		//		}
-		//		catch (Exception e) {
-		//			System.out.println ("Locks: unable to rebind " + e.printStackTrace());
-		//		}
+		for (int i=0;i<L.length;i++)
+			hosts.add(L[i]);
+		//verify
 
-		// start DLM thread here ?
+		/*
+		   hosts.add("sslab08.cs.purdue.edu");
+		   hosts.add("sslab07.cs.purdue.edu");
+		   hosts.add("sslab06.cs.purdue.edu");
+		   hosts.add("sslab05.cs.purdue.edu"); */
+		try {
+			registry = LocateRegistry.createRegistry (rmiport);
+			registry.rebind ("Lock", this);
+		} catch (RemoteException e){
+			throw e;
+		}
+
+		try {
+			myPaxos = new Paxos(hosts);
+		}  catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	public String prepare_msg (String op , String lock_name) {
@@ -52,7 +75,7 @@ public class Locks extends UnicastRemoteObject implements LockServer {
 			//todo
 		}
 		return null;
-	}	
+	}
 
 	public boolean createLock(String lock) throws RemoteException {
 		if (lock_map.containsKey(lock))
@@ -71,8 +94,11 @@ public class Locks extends UnicastRemoteObject implements LockServer {
 
 			myPaxos.start_Accept(msg);
 			createLock_run = true;
+			debug ("safe 1");
 			Object temp_lock_obj = lock2d[prop_num][instance_Num];
+			debug ("safe 2");
 			synchronized(temp_lock_obj){
+			debug ("safe 3");
 				while (createLock_run) {
 					try {
 						temp_lock_obj.wait();           
@@ -100,11 +126,13 @@ public class Locks extends UnicastRemoteObject implements LockServer {
 		int lTime = lock_map.get(lock_Name).leaseTime;
 		int bTime = lock_map.get(lock_Name).birthTime;
 
-		long curTime = System.currentTimeMillis();
+		int curTime = (int)System.currentTimeMillis();
 
 		if(! ((bTime == 0) || ((bTime + (lTime  * 1000)) <= curTime ))) {
-			Exception e = new Exception ("acquireLock: lock already taken by someone");
-			throw e;
+			//Exception e = new Exception ("acquireLock: lock already taken by someone");
+			//throw e;
+			Lock t = new Lock("fail", -1);
+			return t;
 		}
 		else {
 			int instance_Num = myPaxos.getNextInstance();
@@ -125,8 +153,8 @@ public class Locks extends UnicastRemoteObject implements LockServer {
 				}
 			}
 
-			LockMain.lock_map.get(lock_Name).birthTime = System.currentTimeMillis(); 
-			LockMain.lock_map.get(lock_Name).leaseTime = minTime;	// correct ?
+			lock_map.get(lock_Name).birthTime = (int)System.currentTimeMillis(); 
+			lock_map.get(lock_Name).leaseTime = minTime;	// correct ?
 			return lock_map.get(lock_Name);
 		}
 	}
@@ -151,7 +179,11 @@ public class Locks extends UnicastRemoteObject implements LockServer {
 			}
 		}
 
-		LockMain.lock_map.get(lock_Name).birthTime = 0; 
+		if( myPaxos.return_response_info(instance_Num, prop_num))
+		{
+			lock_map.get(lock_Name).birthTime = 0; 
+		}
+		return myPaxos.return_response_info(instance_Num, prop_num);
 	}
 
 	public Lock renewLock(String Lock, int renewalTime) throws RemoteException {
@@ -175,9 +207,6 @@ public class Locks extends UnicastRemoteObject implements LockServer {
 //		valid_locks = new List<String> ();
 //	}
 //
-//	public static debug (String msg) {
-//		System.out.println (msg);
-//	}
 //
 //	public LockServer getRemoteObject () {	// static ?
 //		String DLM_server = "sac07.cs.purdue.edu";

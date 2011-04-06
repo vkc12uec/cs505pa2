@@ -1,7 +1,6 @@
 all:
 	javac *.java
-	rmic Locks
-
+	rmic RmiServer
 
 clean:
 	rm *.class
